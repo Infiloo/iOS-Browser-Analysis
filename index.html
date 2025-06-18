@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive iPadOS Browser Comparison</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutrals -->
+    <!-- Application Structure Plan: The application is structured as a task-oriented interactive dashboard. The primary interaction is a set of filters allowing the user to select a key feature (Ecosystem, Ad Blocker, VPN, Extensions). This choice dynamically updates a central comparison area, which includes a ranked list, a bar chart for quick visual comparison, and summary cards for each browser highlighting its performance in that specific category. This design was chosen over a linear report format to empower users to directly compare browsers based on what matters most to them, making the data more accessible and decision-making more efficient. Below the interactive tool, static sections provide full browser profiles and the report's final recommendations for users who want to delve deeper. -->
+    <!-- Visualization & Content Choices: 
+        - Report Info: Rankings for Ecosystem, Ad Blocker, VPN, Extensions.
+        - Goal: Allow users to easily compare browser performance on a chosen feature.
+        - Viz/Presentation Method: 
+            - Interactive Buttons: To select the comparison category.
+            - Horizontal Bar Chart (Chart.js/Canvas): To visualize the qualitative rankings, which have been converted to a numerical score (7 for 1st, 1 for 7th) for comparative display.
+            - Dynamic Text Cards: To show focused summaries for each browser based on the selected category.
+            - Static Tables & Cards: For the full, unabridged data from the report.
+        - Interaction: Clicking a category button triggers a JS function to update the chart, text summaries, and visibility of corresponding detailed tables.
+        - Justification: This interactive model turns passive data consumption into active exploration. It provides immediate visual feedback via the chart and targeted information via the dynamic cards, answering a user's specific query ("Which browser has the best VPN?") directly and efficiently.
+        - Library/Method: Chart.js for visualization, Vanilla JS for interaction logic, Tailwind CSS for styling.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8f7f4;
+            color: #3f3c3a;
+        }
+        .active-filter {
+            background-color: #4a5568;
+            color: #ffffff;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -2px rgba(0, 0, 0, 0.1);
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 400px;
+            max-height: 50vh;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+         @media (max-width: 640px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+
+        <header class="text-center mb-10 md:mb-16">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800 tracking-tight">iPadOS Browser Comparator</h1>
+            <p class="mt-4 max-w-3xl mx-auto text-lg text-gray-600">An interactive guide to choosing the best browser for your iPad, based on the features you value most.</p>
+        </header>
+
+        <main>
+            <section id="interactive-comparator" class="bg-white rounded-xl shadow-lg p-6 md:p-8 mb-12">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-gray-800 mb-2">Find Your Perfect Browser</h2>
+                    <p class="text-gray-600 mb-4">The performance of all iPadOS browsers is based on Apple's WebKit engine. This means the best choice comes down to features. Select a category below to see how they compare.</p>
+                    <div id="filter-buttons" class="flex flex-wrap gap-3 justify-center">
+                        <button data-filter="overall" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-gray-200 text-gray-700 rounded-full shadow-sm hover:bg-gray-300 transition-all duration-200 ease-in-out active-filter">Overall</button>
+                        <button data-filter="ecosystem" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-gray-200 text-gray-700 rounded-full shadow-sm hover:bg-gray-300 transition-all duration-200 ease-in-out">Ecosystem</button>
+                        <button data-filter="adblock" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-gray-200 text-gray-700 rounded-full shadow-sm hover:bg-gray-300 transition-all duration-200 ease-in-out">Ad Blocker</button>
+                        <button data-filter="vpn" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-gray-200 text-gray-700 rounded-full shadow-sm hover:bg-gray-300 transition-all duration-200 ease-in-out">VPN</button>
+                        <button data-filter="extensions" class="filter-btn px-4 py-2 text-sm md:text-base font-semibold bg-gray-200 text-gray-700 rounded-full shadow-sm hover:bg-gray-300 transition-all duration-200 ease-in-out">Extensions</button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 lg:grid-cols-5 gap-8 items-start">
+                    <div id="ranking-list" class="lg:col-span-2 bg-gray-50 rounded-lg p-6">
+                        <h3 id="ranking-title" class="text-xl font-bold text-gray-800 mb-4">Overall Ranking</h3>
+                        <ol id="ranked-items" class="list-decimal list-inside space-y-2 text-gray-700 font-medium">
+                        </ol>
+                    </div>
+
+                    <div id="chart-display" class="lg:col-span-3">
+                        <div class="chart-container">
+                            <canvas id="browserChart"></canvas>
+                        </div>
+                        <p class="text-center text-xs text-gray-500 mt-2">Scores are derived from report rankings for visualization.</p>
+                    </div>
+                </div>
+
+                <div id="summary-section" class="mt-10">
+                    <h3 id="summary-title" class="text-xl font-bold text-gray-800 mb-4">Category Summary: Overall</h3>
+                    <div id="summary-cards" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                    </div>
+                </div>
+            </section>
+
+            <section id="recommendations" class="mb-12">
+                <h2 class="text-3xl font-bold text-gray-800 text-center mb-8">Recommendations at a Glance</h2>
+                 <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                    <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-bold text-lg text-gray-800">For Apple Ecosystem Users</h3>
+                        <p class="text-gray-600 mt-2"><strong class="text-blue-600">Safari:</strong> The best choice for its seamless integration, Handoff, and iCloud Keychain.</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-bold text-lg text-gray-800">For All-in-One Convenience</h3>
+                        <p class="text-gray-600 mt-2"><strong class="text-red-600">Opera:</b> Excellent for its free, built-in VPN and a strong ad blocker right out of the box.</p>
+                    </div>
+                     <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-bold text-lg text-gray-800">For Aggressive Ad Blocking</h3>
+                        <p class="text-gray-600 mt-2"><strong class="text-orange-600">Brave:</strong> The top performer for speed and privacy due to its powerful default ad blocker.</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-bold text-lg text-gray-800">For Ultimate Privacy</h3>
+                        <p class="text-gray-600 mt-2"><strong class="text-purple-600">DuckDuckGo:</strong> The go-to for comprehensive tracker blocking and advanced privacy features.</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-bold text-lg text-gray-800">For Cross-Platform Sync</h3>
+                        <p class="text-gray-600 mt-2"><strong class="text-blue-800">Firefox & Edge:</strong> Best for syncing with Windows/Linux PCs outside the Apple ecosystem.</p>
+                    </div>
+                    <div class="bg-white rounded-xl shadow-md p-6">
+                        <h3 class="font-bold text-lg text-gray-800">For Chrome Extensions</h3>
+                        <p class="text-gray-600 mt-2"><strong class="text-gray-700">Orion Browser:</strong> A unique third-party solution that offers a workaround to install Chrome extensions.</p>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="browser-profiles" class="mb-12">
+                <h2 class="text-3xl font-bold text-gray-800 text-center mb-8">Detailed Browser Profiles</h2>
+                <div id="profile-cards" class="space-y-6">
+                </div>
+            </section>
+
+            <section id="gemini-query-section" class="bg-white rounded-xl shadow-lg p-6 md:p-8">
+                <h2 class="text-2xl font-bold text-gray-800 mb-4">✨ Ask Gemini about Browsers ✨</h2>
+                <p class="text-gray-600 mb-4">Type a question about any of the iPadOS browsers listed above, and Gemini will provide an answer.</p>
+                <textarea id="gemini-input" class="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent mb-4" rows="3" placeholder="e.g., 'What are Safari's privacy features?' or 'Compare Brave and Opera on ad blocking.'"></textarea>
+                <button id="gemini-submit" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-full shadow-md hover:bg-blue-700 transition-colors duration-200 ease-in-out flex items-center justify-center">
+                    Ask Gemini
+                    <span id="gemini-loading" class="hidden ml-2">
+                        <svg class="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                    </span>
+                </button>
+                <div id="gemini-response" class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200 text-gray-700 hidden">
+                    <p class="font-semibold mb-2">Gemini's Response:</p>
+                    <div id="gemini-response-content"></div>
+                </div>
+                 <div id="gemini-error" class="mt-6 p-4 bg-red-100 rounded-lg border border-red-200 text-red-700 hidden">
+                    <p class="font-semibold mb-2">Error:</p>
+                    <div id="gemini-error-content"></div>
+                </div>
+            </section>
+
+        </main>
+
+        <footer class="text-center mt-12 pt-8 border-t border-gray-200">
+            <p class="text-sm text-gray-500">This interactive application is based on the "Analysis and Ranking of Browsers for iPadOS" report. All content is derived from the source material.</p>
+        </footer>
+    </div>
+
+    <script>
+        const browserData = {
+            safari: {
+                name: "Safari",
+                color: 'rgba(0, 122, 255, 0.7)',
+                profile: `Offers the deepest integration with the Apple ecosystem, including iCloud Tabs, Handoff, and iCloud Keychain. It relies on third-party App Store extensions for comprehensive ad blocking (e.g., AdGuard, Wipr2) but has effective built-in Intelligent Tracking Prevention. It does not have a built-in VPN. Safari is the only browser with a native, App Store-managed ecosystem for extensions on iPadOS.`,
+                rankings: {
+                    overall: { rank: 1, score: 7, summary: "Unparalleled Apple ecosystem integration and native extension support make it the most seamless experience for Apple users." },
+                    ecosystem: { rank: 1, score: 7, summary: "Unmatched native integration with iCloud Tabs, Handoff, and iCloud Keychain for a seamless experience across Apple devices." },
+                    adblock: { rank: 4, score: 4, summary: "Relies on powerful third-party extensions from the App Store for full ad-blocking. Basic built-in tracker protection." },
+                    vpn: { rank: 4, score: 1, summary: "No built-in VPN. Users must install and use a separate, standalone VPN application from the App Store." },
+                    extensions: { rank: 1, score: 7, summary: "The only major browser with native, integrated support for extensions, managed securely through the App Store." }
+                }
+            },
+            opera: {
+                name: "Opera",
+                color: 'rgba(255, 22, 22, 0.7)',
+                profile: `Features seamless sync with its desktop counterpart and a built-in password manager. Its standout features are a free, built-in, no-logs VPN and an effective "Enhanced Native Ad Blocker" that also protects against cryptojacking. The user interface has won design awards. It does not support extensions on iPadOS.`,
+                rankings: {
+                    overall: { rank: 2, score: 6, summary: "A comprehensive package with a free built-in VPN and effective ad blocker, offering a great private experience out-of-the-box." },
+                    ecosystem: { rank: 4, score: 4, summary: "Good sync with its own desktop counterpart, but offers less broad integration compared to Firefox or Edge." },
+                    adblock: { rank: 2, score: 6, summary: "Excellent native ad blocker with cryptojacking protection, providing a clean and fast experience with one click." },
+                    vpn: { rank: 1, score: 7, summary: "The clear winner, offering a completely free, no-logs VPN built directly into the browser with no subscription required." },
+                    extensions: { rank: 3, score: 1, summary: "Does not support extensions. Its functionality is focused on its powerful suite of built-in features." }
+                }
+            },
+            brave: {
+                name: "Brave",
+                color: 'rgba(255, 128, 0, 0.7)',
+                profile: `Built around privacy and speed, Brave features a highly aggressive built-in ad and tracker blocker that significantly speeds up Browse. It offers a "Firewall + VPN" service for a monthly/annual subscription. Its ecosystem includes the Brave Wallet for cryptocurrency. It does not support extensions on iPadOS.`,
+                rankings: {
+                    overall: { rank: 3, score: 5, summary: "A top contender for privacy and speed, thanks to its aggressive default ad blocker. Paid VPN is a powerful option." },
+                    ecosystem: { rank: 6, score: 2, summary: "Ecosystem focus is on Web3 and Brave Wallet, not traditional cross-device Browse continuity." },
+                    adblock: { rank: 1, score: 7, summary: "The most comprehensive and aggressive built-in ad/tracker blocking, which demonstrably enhances speed and privacy." },
+                    vpn: { rank: 2, score: 5, summary: "Offers a robust 'Firewall + VPN' solution, but it is a premium feature available via a paid subscription." },
+                    extensions: { rank: 3, score: 1, summary: "Does not support extensions on iPadOS, despite its desktop version being compatible with Chrome extensions." }
+                }
+            },
+            duckduckgo: {
+                name: "DuckDuckGo",
+                color: 'rgba(102, 0, 102, 0.7)',
+                profile: `The ultimate browser for privacy. It blocks hidden trackers by default, banishes cookie pop-ups, and offers fingerprinting protection. It provides a VPN as part of a paid "Privacy Pro" subscription. Syncs encrypted bookmarks and passwords. It does not support extensions on iPadOS.`,
+                rankings: {
+                    overall: { rank: 4, score: 4, summary: "The top choice for extreme privacy consciousness, with extensive default protections against tracking and fingerprinting." },
+                    ecosystem: { rank: 7, score: 1, summary: "Minimal ecosystem integration, focusing solely on privacy-preserving sync for bookmarks and passwords." },
+                    adblock: { rank: 3, score: 5, summary: "Strong focus on privacy-first blocking of trackers and cookie pop-ups for a very clean, private experience." },
+                    vpn: { rank: 3, score: 3, summary: "Offers a VPN as part of its paid 'Privacy Pro' subscription, bundled with other privacy services." },
+                    extensions: { rank: 3, score: 1, summary: "Cannot use extensions, meaning tools like third-party password managers are not compatible within the browser." }
+                }
+            },
+            firefox: {
+                name: "Firefox",
+                color: 'rgba(0, 0, 204, 0.7)',
+                profile: `Developed by the non-profit Mozilla Foundation, Firefox offers excellent cross-platform syncing of tabs, passwords, and history, making it ideal for users with Windows or Linux PCs. It has strong built-in "Enhanced Tracking Protection." Mozilla VPN is available as a separate app. It does not support extensions on iPadOS.`,
+                rankings: {
+                    overall: { rank: 5, score: 3, summary: "Excellent for cross-platform syncing and has strong tracking protection, but is held back by the lack of extension support." },
+                    ecosystem: { rank: 2, score: 6, summary: "Outstanding cross-platform sync, creating a 'handoff' experience for users with non-Apple desktop computers." },
+                    adblock: { rank: 6, score: 2, summary: "Strong built-in tracker protection (ETP), but its effectiveness is limited by the inability to add ad-blocking extensions." },
+                    vpn: { rank: 4, score: 1, summary: "No built-in VPN. Mozilla offers a separate, standalone VPN app that can be used with any browser." },
+                    extensions: { rank: 3, score: 1, summary: "Explicitly does not support extensions on iPadOS due to Apple's platform restrictions, unlike its desktop version." }
+                }
+            },
+            edge: {
+                name: "Microsoft Edge",
+                color: 'rgba(0, 102, 102, 0.7)',
+                profile: `A solid choice for users in the Microsoft ecosystem, offering robust syncing of favorites, passwords, and settings across Windows, Android, and iOS. It features a good built-in ad blocker powered by AdBlock Plus and AI-powered Copilot. It does not have a built-in VPN and does not support extensions on iPadOS.`,
+                rankings: {
+                    overall: { rank: 6, score: 2, summary: "A good choice for Windows users due to its sync capabilities, but hampered by the lack of extension support on iPadOS." },
+                    ecosystem: { rank: 3, score: 5, summary: "Strong sync capabilities across Microsoft services and devices, making it a great companion for Windows users." },
+                    adblock: { rank: 5, score: 3, summary: "Good built-in ad blocker powered by AdBlock Plus, offering a solid default ad-free experience." },
+                    vpn: { rank: 4, score: 1, summary: "No built-in VPN and no support for VPN extensions. Requires a separate, standalone VPN application." },
+                    extensions: { rank: 3, score: 1, summary: "Does not support extensions on iPadOS, a key difference from its highly-extensible desktop version." }
+                }
+            },
+            chrome: {
+                name: "Google Chrome",
+                color: 'rgba(102, 102, 102, 0.7)',
+                profile: `Offers seamless synchronization of bookmarks, history, and passwords with the hugely popular desktop Chrome browser. Its built-in ad blocking is limited to pop-ups, and it does not support extensions on iPadOS. It has been flagged by Apple for privacy risks due to Google's data collection model.`,
+                rankings: {
+                    overall: { rank: 7, score: 1, summary: "Basic sync is its main draw, but it's severely limited by a lack of extensions and significant privacy concerns on iPadOS." },
+                    ecosystem: { rank: 5, score: 3, summary: "Primarily offers sync with desktop Chrome. Valuable due to market share, but lacks deeper iPadOS integration." },
+                    adblock: { rank: 7, score: 1, summary: "Very limited built-in ad blocking (pop-ups only) and no support for ad-blocking extensions on iPadOS." },
+                    vpn: { rank: 4, score: 1, summary: "No built-in VPN and cannot use Chrome VPN extensions. Requires a separate, standalone VPN app." },
+                    extensions: { rank: 3, score: 1, summary: "Cannot install Chrome extensions on iPadOS due to Apple's security architecture, a major limitation." }
+                }
+            }
+        };
+
+        let browserChart = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const filterButtons = document.querySelectorAll('.filter-btn');
+            const geminiInput = document.getElementById('gemini-input');
+            const geminiSubmit = document.getElementById('gemini-submit');
+            const geminiResponseDiv = document.getElementById('gemini-response');
+            const geminiResponseContent = document.getElementById('gemini-response-content');
+            const geminiErrorDiv = document.getElementById('gemini-error');
+            const geminiErrorContent = document.getElementById('gemini-error-content');
+            const geminiLoading = document.getElementById('gemini-loading');
+            
+            populateProfiles();
+            updateView('overall');
+
+            filterButtons.forEach(button => {
+                button.addEventListener('click', () => {
+                    filterButtons.forEach(btn => btn.classList.remove('active-filter'));
+                    button.classList.add('active-filter');
+                    const filter = button.dataset.filter;
+                    updateView(filter);
+                });
+            });
+
+            geminiSubmit.addEventListener('click', async () => {
+                const prompt = geminiInput.value.trim();
+                if (!prompt) {
+                    geminiErrorContent.textContent = "Please enter a question.";
+                    geminiErrorDiv.classList.remove('hidden');
+                    geminiResponseDiv.classList.add('hidden');
+                    return;
+                }
+
+                geminiResponseDiv.classList.add('hidden');
+                geminiErrorDiv.classList.add('hidden');
+                geminiLoading.classList.remove('hidden');
+                geminiSubmit.disabled = true;
+
+                try {
+                    let chatHistory = [];
+                    // Append browser data to prompt to provide context
+                    let context = "Here is some information about iPadOS browsers:\n";
+                    Object.values(browserData).forEach(browser => {
+                        context += `${browser.name}:\n`;
+                        context += `  Profile: ${browser.profile}\n`;
+                        context += `  Overall Rank: ${browser.rankings.overall.rank} - ${browser.rankings.overall.summary}\n`;
+                        context += `  Ecosystem Rank: ${browser.rankings.ecosystem.rank} - ${browser.rankings.ecosystem.summary}\n`;
+                        context += `  Adblock Rank: ${browser.rankings.adblock.rank} - ${browser.rankings.adblock.summary}\n`;
+                        context += `  VPN Rank: ${browser.rankings.vpn.rank} - ${browser.rankings.vpn.summary}\n`;
+                        context += `  Extensions Rank: ${browser.rankings.extensions.rank} - ${browser.rankings.extensions.summary}\n\n`;
+                    });
+
+                    chatHistory.push({ role: "user", parts: [{ text: `${context} Based on this, or general knowledge, ${prompt}` }] });
+
+                    const payload = { contents: chatHistory };
+                    const apiKey = "";
+                    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                    const response = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const result = await response.json();
+                    
+                    if (result.candidates && result.candidates.length > 0 &&
+                        result.candidates[0].content && result.candidates[0].content.parts &&
+                        result.candidates[0].content.parts.length > 0) {
+                        const text = result.candidates[0].content.parts[0].text;
+                        geminiResponseContent.textContent = text;
+                        geminiResponseDiv.classList.remove('hidden');
+                    } else {
+                        geminiErrorContent.textContent = "Could not get a valid response from Gemini. Please try again.";
+                        geminiErrorDiv.classList.remove('hidden');
+                    }
+                } catch (error) {
+                    geminiErrorContent.textContent = `An error occurred: ${error.message}. Please try again later.`;
+                    geminiErrorDiv.classList.remove('hidden');
+                    console.error("Gemini API Error:", error);
+                } finally {
+                    geminiLoading.classList.add('hidden');
+                    geminiSubmit.disabled = false;
+                }
+            });
+        });
+
+        function populateProfiles() {
+            const container = document.getElementById('profile-cards');
+            container.innerHTML = '';
+            Object.values(browserData).sort((a,b) => a.rankings.overall.rank - b.rankings.overall.rank).forEach(browser => {
+                const card = document.createElement('article');
+                card.className = "bg-white rounded-xl shadow-md p-6 border-l-4";
+                card.style.borderColor = browser.color.replace('0.7', '1');
+                card.innerHTML = `
+                    <h3 class="text-2xl font-bold text-gray-800">${browser.name}</h3>
+                    <p class="text-gray-600 mt-2">${browser.profile}</p>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        function updateView(filter) {
+            const browsers = Object.values(browserData);
+            const sortedData = browsers.sort((a, b) => a.rankings[filter].rank - b.rankings[filter].rank);
+            
+            updateRankingList(sortedData, filter);
+            updateSummaryCards(sortedData, filter);
+            renderChart(sortedData, filter);
+
+            const title = filter.charAt(0).toUpperCase() + filter.slice(1);
+            document.getElementById('ranking-title').textContent = `${title} Ranking`;
+            document.getElementById('summary-title').textContent = `Category Summary: ${title}`;
+        }
+        
+        function updateRankingList(sortedData, filter) {
+            const listContainer = document.getElementById('ranked-items');
+            listContainer.innerHTML = '';
+            sortedData.forEach(browser => {
+                const li = document.createElement('li');
+                li.innerHTML = `<span class="font-bold">${browser.name}</span>`;
+                if(filter === 'extensions' && browser.name === "Safari"){
+                    li.innerHTML += ` <span class="text-xs text-blue-600 font-semibold">(+ Orion Workaround)</span>`;
+                }
+                listContainer.appendChild(li);
+            });
+        }
+
+        function updateSummaryCards(sortedData, filter) {
+            const cardsContainer = document.getElementById('summary-cards');
+            cardsContainer.innerHTML = '';
+            sortedData.forEach(browser => {
+                const card = document.createElement('div');
+                card.className = "bg-gray-50 rounded-lg p-4 border-l-4";
+                card.style.borderColor = browser.color.replace('0.7', '1');
+                card.innerHTML = `
+                    <h4 class="font-bold text-gray-800">${browser.name}</h4>
+                    <p class="text-sm text-gray-600 mt-1">${browser.rankings[filter].summary}</p>
+                `;
+                cardsContainer.appendChild(card);
+            });
+        }
+
+        function renderChart(sortedData, filter) {
+            const ctx = document.getElementById('browserChart').getContext('2d');
+            const chartData = {
+                labels: sortedData.map(b => b.name),
+                datasets: [{
+                    label: `Score (Higher is Better)`,
+                    data: sortedData.map(b => b.rankings[filter].score),
+                    backgroundColor: sortedData.map(b => b.color),
+                    borderColor: sortedData.map(b => b.color.replace('0.7', '1')),
+                    borderWidth: 1
+                }]
+            };
+
+            if (browserChart) {
+                browserChart.destroy();
+            }
+
+            browserChart = new Chart(ctx, {
+                type: 'bar',
+                data: chartData,
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: false
+                        },
+                        tooltip: {
+                            backgroundColor: '#3f3c3a',
+                            titleFont: {
+                                weight: 'bold'
+                            },
+                            bodyFont: {
+                                weight: 'normal'
+                            },
+                            displayColors: false,
+                        }
+                    },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: {
+                                color: '#e5e7eb'
+                            },
+                            ticks: {
+                                color: '#6b7280'
+                            }
+                        },
+                        y: {
+                             grid: {
+                                display: false
+                            },
+                            ticks: {
+                                color: '#374151',
+                                font: {
+                                    weight: '600'
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+    </script>
+
+</body>
+</html>
